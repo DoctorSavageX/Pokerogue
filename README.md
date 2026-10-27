@@ -1,29 +1,29 @@
 # PokéRogue — single HTML file
 
-`PokeRogue.html` is the whole game in one file. Open it in a browser (Chrome, Edge or Firefox) and play.
+Download `PokeRogue.html`, open it in a browser (Chrome, Edge or Firefox) and play.
 
-- **Needs internet.** All of the game code is inside the file, but images, music and text are loaded from GitHub
-  (`raw.githubusercontent.com`, from the `pokerogue-assets` and `pokerogue-locales` repos).
-- **Guest/offline saves.** There is no login. Progress is saved in your browser's local storage, separate from any
-  pokerogue.net account. Clearing browser data erases it.
-- Daily runs, leaderboards and anything that needs the official server won't work.
+- **Auto-updates.** Each time you open it, the page checks this repo for the newest build and downloads it if
+  there is one. A GitHub Action (`.github/workflows/build.yml`) rebuilds the game every day from the latest
+  PokeRogue release and commits it to `latest/`. The last download is kept, so the game still starts if the check fails.
+- **Needs internet.** Images, music and text load from GitHub (`raw.githubusercontent.com`), from the
+  `pokerogue-assets` and `pokerogue-locales` repos.
+- **This repo must be public**, or the page can't download the builds.
+- **Guest saves only.** There is no login. Progress is saved in your browser, separate from any pokerogue.net
+  account, and survives updates. Clearing browser data erases it. The official server only accepts requests from
+  pokerogue.net itself, so logging in from this file isn't possible.
+- Daily runs, leaderboards and anything else that needs the official server won't work.
 
-## How it was built
+## How it's built
 
-Built from [pagefaultgames/pokerogue](https://github.com/pagefaultgames/pokerogue) at commit
-`3368c11f9bc2061a1e52f3c2e2f38f8db0f0ed6e` (AGPL-3.0), with `single-file-build.patch` applied:
+From [pagefaultgames/pokerogue](https://github.com/pagefaultgames/pokerogue) (AGPL-3.0), `main` branch.
+`build/patch.py` makes these changes before building:
 
 - locale files load from the `pokerogue-locales` repo on GitHub
-- the whole bundle is built as one chunk (`inlineDynamicImports`)
+- the whole game is built as one JS file
 - the loader requests assets with CORS, so GitHub-hosted images and videos can be drawn in WebGL
 - move animations accept GitHub's `text/plain` content type for JSON
 
-```sh
-git clone https://github.com/pagefaultgames/pokerogue && cd pokerogue
-git checkout 3368c11f9bc2061a1e52f3c2e2f38f8db0f0ed6e
-git clone https://github.com/pagefaultgames/pokerogue-locales locales  # build reads locale namespaces
-git apply ../single-file-build.patch
-pnpm install --frozen-lockfile --ignore-scripts
-VITE_BYPASS_LOGIN=1 npx vite build --mode production   # the static-shell plugin errors at the end; dist/ is still written
-python3 ../assemble.py dist ../PokeRogue.html
-```
+`build/assemble.py` then writes `latest/game.js`, `game.css`, `shell.html` and `version.json`.
+
+To rebuild right away instead of waiting for the daily run: Actions → Build PokeRogue → Run workflow
+(tick "force" to rebuild the same version).

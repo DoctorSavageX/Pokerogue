@@ -1,0 +1,88 @@
+# Rebuilds the game from the latest PokeRogue release and commits it to latest/,
+# which PokeRogue.html downloads every time it opens.
+name: Build PokeRogue
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild even if PokeRogue hasn't changed"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-pokerogue
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
+
+      - name: Check for a new PokeRogue version
+        id: check
+        run: |
+          upstream=$(git ls-remote https://github.com/pagefaultgames/pokerogue refs/heads/main | cut -f1)
+          current=$(python3 -c "import json; print(json.load(open('latest/version.json'))['pokerogueCommit'])" 2>/dev/null || true)
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          if [ "$upstream" = "$current" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "Already on $upstream, nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch PokeRogue source
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git clone --depth 1 --branch main https://github.com/pagefaultgames/pokerogue pokerogue
+          cd pokerogue
+          git checkout --quiet ${{ steps.check.outputs.upstream }}
+          echo "ASSETS_SHA=$(git ls-tree HEAD assets | awk '{print $3}')" >> "$GITHUB_ENV"
+          echo "LOCALES_SHA=$(git ls-tree HEAD locales | awk '{print $3}')" >> "$GITHUB_ENV"
+          echo "GAME_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Fetch locales (the build reads its namespaces)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          cd pokerogue/locales
+          git init --quiet
+          git fetch --quiet --depth 1 https://github.com/pagefaultgames/pokerogue-locales "$LOCALES_SHA"
+          git checkout --quiet FETCH_HEAD
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        if: steps.check.outputs.skip != 'true'
+        with:
+          package_json_file: pokerogue/package.json
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.check.outputs.skip != 'true'
+        with:
+          node-version-file: pokerogue/.nvmrc
+
+      - name: Patch and build
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          python3 build/patch.py pokerogue "$LOCALES_SHA"
+          cd pokerogue
+          pnpm install --frozen-lockfile --ignore-scripts
+          VITE_BYPASS_LOGIN=1 pnpm exec vite build --mode production
+          cd ..
+          python3 build/assemble.py pokerogue/dist latest ${{ steps.check.outputs.upstream }} "$ASSETS_SHA" "$GAME_VERSION"
+
+      - name: Commit new build
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Update PokeRogue build to $GAME_VERSION (${{ steps.check.outputs.upstream }})"
+          git push
