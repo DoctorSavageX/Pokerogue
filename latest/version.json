@@ -1,6 +1,6 @@
 {
-  "version": "1.12.2.4",
-  "pokerogueCommit": "f045bef687ee7a60faa94679939d5d9e074cb19d",
-  "builtAt": "2026-11-05T14:42:38Z",
-  "assetsBase": "https://raw.githubusercontent.com/pagefaultgames/pokerogue-assets/9b3a0969c743baec2d4663b40d068a26e0a066fd/"
+  "version": "1.12.2.6",
+  "pokerogueCommit": "967ac11fad5b31ead174077c6934b5bcded097a2",
+  "builtAt": "2026-11-07T13:07:05Z",
+  "assetsBase": "https://raw.githubusercontent.com/pagefaultgames/pokerogue-assets/a971db88f4be6367d78011ca75c5085ecc23ce06/"
 }
