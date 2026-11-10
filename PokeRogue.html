@@ -21,6 +21,24 @@
       font: 16px Arial, Helvetica, sans-serif;
       z-index: 10;
     }
+    #launcher div { max-width: 640px; }
+    #launcher pre {
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 40vh;
+      overflow: auto;
+    }
+    #launcher button {
+      font: 15px Arial, Helvetica, sans-serif;
+      padding: 8px 16px;
+      margin-top: 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -32,6 +50,17 @@
   // and keeps a copy so the game still starts if the update check fails.
   var BUILD_URL = "https://raw.githubusercontent.com/DoctorSavageX/Pokerogue/HEAD/latest/";
   var launcher = document.getElementById("launcher");
+  var errors = [];
+
+  window.addEventListener("error", function (e) {
+    errors.push((e.message || String(e.error)) + (e.lineno ? " (line " + e.lineno + ")" : ""));
+    setTimeout(checkStarted, 3000);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason;
+    errors.push("Unhandled: " + (r && r.stack ? r.stack.split("\n").slice(0, 3).join(" | ") : String(r)));
+    setTimeout(checkStarted, 3000);
+  });
 
   function status(text) {
     launcher.textContent = text;
@@ -46,14 +75,44 @@
     });
   }
 
+  // Some browsers never answer IndexedDB requests from local files, so give up on the cache after a few seconds
+  function withTimeout(promise, ms) {
+    return Promise.race([promise, new Promise(function (resolve) { setTimeout(function () { resolve(null); }, ms); })]);
+  }
+
+  // Shows what went wrong on screen, since school Chromebooks often block the developer console
+  var startedBuild = null;
+  function checkStarted() {
+    if (!startedBuild || document.querySelector("#app canvas") || document.getElementById("crash")) {
+      return;
+    }
+    var info = startedBuild.info;
+    var box = document.createElement("div");
+    box.id = "launcher";
+    box.innerHTML = "<div><b>PokéRogue didn't start.</b><br/>Take a screenshot of this and send it over.<pre></pre>" +
+      "<button type='button'>Clear downloaded copy and retry</button></div>";
+    box.querySelector("div").id = "crash";
+    box.querySelector("pre").textContent =
+      "Version " + info.version + ", built " + info.builtAt + "\n" +
+      "game.js: " + startedBuild.js.length + " chars, starts with: " + JSON.stringify(startedBuild.js.slice(0, 60)) + "\n" +
+      "Browser: " + navigator.userAgent + "\n\n" +
+      (errors.length ? errors.slice(0, 10).join("\n") : "No error was reported. The game may still be loading or was blocked.");
+    box.querySelector("button").onclick = function () {
+      var req = indexedDB.deleteDatabase("pokerogue-launcher");
+      req.onsuccess = req.onerror = req.onblocked = function () { location.reload(); };
+      setTimeout(function () { location.reload(); }, 2000);
+    };
+    document.body.appendChild(box);
+  }
+
   function readCache() {
-    return openDb().then(function (db) {
+    return withTimeout(openDb().then(function (db) {
       return new Promise(function (resolve) {
         var req = db.transaction("build").objectStore("build").get("current");
         req.onsuccess = function () { resolve(req.result || null); };
         req.onerror = function () { resolve(null); };
       });
-    }).catch(function () { return null; });
+    }), 3000).catch(function () { return null; });
   }
 
   function writeCache(build) {
@@ -90,6 +149,9 @@
     script.type = "module";
     script.textContent = build.js;
     document.body.appendChild(script);
+
+    startedBuild = build;
+    setTimeout(checkStarted, 30000);
   }
 
   readCache().then(function (cached) {
@@ -108,6 +170,11 @@
         var v = encodeURIComponent(info.builtAt);
         return Promise.all([fetchText("game.js", v), fetchText("game.css", v), fetchText("shell.html", v)]).then(function (parts) {
           var build = { info: info, js: parts[0], css: parts[1], shell: parts[2] };
+          // A web filter can answer with its own "blocked" page instead of the file
+          if (build.js.length < 1000000 || build.js.trim().charAt(0) === "<" || build.shell.indexOf('id="app"') === -1) {
+            throw new Error("the downloaded game files look wrong (game.js is " + build.js.length +
+              " characters and starts with " + JSON.stringify(build.js.slice(0, 40)) + "). A web filter may be blocking them");
+          }
           writeCache(build);
           return build;
         });
@@ -120,7 +187,7 @@
         throw err;
       });
   }).then(start, function (err) {
-    status("Couldn't download PokéRogue (" + err.message + "). Check your internet connection, or whether raw.githubusercontent.com is blocked.");
+    status("Couldn't download PokéRogue: " + err.message + ". Check your internet connection, or whether raw.githubusercontent.com is blocked.");
   });
 </script>
 
