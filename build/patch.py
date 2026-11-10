@@ -2,8 +2,9 @@
 
 Usage: python3 build/patch.py <pokerogue-dir> <locales-commit-sha>
 
-Every replacement must match exactly once, so an upstream change that breaks
-one of them fails the build loudly instead of shipping a broken game.
+Every replacement must match the expected number of times (once unless noted),
+so an upstream change that breaks one of them fails the build loudly instead of
+shipping a broken game.
 """
 
 import sys
@@ -44,6 +45,13 @@ PATCHES = [
         '      (await import("./plugins/vite/static-shell-plugin.ts")).staticShellPlugin(),\n',
         "",
     ),
+    # Show Import Session / Import Data so saves exported from pokerogue.net can be loaded
+    (
+        "src/ui/handlers/menu-ui-handler.ts",
+        "if (isBeta || isDev || isApp) {",
+        "if (isBeta || isDev || isApp || bypassLogin) {",
+        2,
+    ),
     # Build everything into one JS file
     (
         "vite.config.ts",
@@ -52,11 +60,12 @@ PATCHES = [
     ),
 ]
 
-for rel, old, new in PATCHES:
+for rel, old, new, *expected in PATCHES:
+    expected = expected[0] if expected else 1
     path = src / rel
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
-    if count != 1:
-        sys.exit(f"patch.py: expected 1 match in {rel}, found {count}:\n  {old!r}")
+    if count != expected:
+        sys.exit(f"patch.py: expected {expected} match(es) in {rel}, found {count}:\n  {old!r}")
     path.write_text(text.replace(old, new), encoding="utf-8")
     print(f"patched {rel}")

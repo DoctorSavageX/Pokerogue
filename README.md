@@ -11,6 +11,9 @@ Download `PokeRogue.html`, open it in a browser (Chrome, Edge or Firefox) and pl
 - **Guest saves only.** There is no login. Progress is saved in your browser, separate from any pokerogue.net
   account, and survives updates. Clearing browser data erases it. The official server only accepts requests from
   pokerogue.net itself, so logging in from this file isn't possible.
+- **Copying your pokerogue.net progress in (one way).** On pokerogue.net: Menu → Manage Data → Export Data (and
+  Export Session for a run in progress). In this file: Menu → Manage Data → Import Data / Import Session, and pick
+  the downloaded file. pokerogue.net has no import, so progress can't go back the other way.
 - Daily runs, leaderboards and anything else that needs the official server won't work.
 
 ## How it's built
@@ -22,6 +25,7 @@ From [pagefaultgames/pokerogue](https://github.com/pagefaultgames/pokerogue) (AG
 - the whole game is built as one JS file
 - the loader requests assets with CORS, so GitHub-hosted images and videos can be drawn in WebGL
 - move animations accept GitHub's `text/plain` content type for JSON
+- the Import Session / Import Data menu options are shown (upstream only shows them on beta and dev builds)
 
 `build/assemble.py` then writes `latest/game.js`, `game.css`, `shell.html` and `version.json`.
 
